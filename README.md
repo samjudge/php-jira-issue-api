@@ -1,4 +1,4 @@
-# php_jira_api
+# php-jira-issue-api
 A simple to use PHP interface for JIRA's restful API.
 
 Include `Project.php` in your project, and create an instance of the `Project` class, passing a host, project key, username  and password.
