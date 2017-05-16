@@ -40,7 +40,7 @@ class Project {
         }
         $result = json_decode($result,true);
         try{
-            $this->cfms = $this->map_custom_fields($result);
+            $this->cfms = $this->init_custom_fields_maps($result);
         } catch (Exception $ex){
             throw $ex;
         }
@@ -57,6 +57,10 @@ class Project {
     
     public function get_bauth(){
         return $this->bauth;
+    }
+    
+    public function get_pwd(){
+        return $this->pwd;
     }
     
     public function ping(){
@@ -77,7 +81,7 @@ class Project {
         curl_close($this->ch);
     }
     
-    private function map_custom_fields($project_metadata){
+    private function init_custom_fields_maps($project_metadata){
         $cfms = array();
         if(isset($project_metadata["projects"][0]["issuetypes"])){
             foreach($project_metadata["projects"][0]["issuetypes"] as $issuetype){
@@ -96,6 +100,20 @@ class Project {
         return $cfms;
     }
     
+    private function map_custom_fields($data){
+        $issuetype = $data["issuetype"]["name"];
+        if(!isset($this->cfms[$issuetype])) throw new Exception("Error : DemapCustomFields : No cfm for provided issuetype");
+        foreach($this->cfms[$issuetype] as $human_name=>$custom_name){
+            foreach($data as $k=>$v){
+                if($k == $custom_name){
+                    $data[$human_name] = $v;
+                    unset($data[$k]);
+                }
+            }
+        }
+        return $data;
+    }
+
     private function demap_custom_fields($data){
         $issuetype = $data["issuetype"]["name"];
         if(!isset($this->cfms[$issuetype]))throw new Exception("Error : DemapCustomFields : No cfm for provided issuetype");
@@ -156,12 +174,13 @@ class Project {
             );
         }
         curl_close($this->ch);
-        return true;
+        return $result;
     }
     
     public function create_multiple_issues($datas, $is_atomic = true){
         $status_code = 0;
         $target = $this->host."/rest/api/2/issue/bulk";
+        $result_inf = array();
         if($is_atomic == true){
             $bulk_data = array(
                 "issueUpdates"=>array()
@@ -194,6 +213,7 @@ class Project {
                 )
             );
             $result = curl_exec($this->ch);
+            array_push($result_inf,json_decode($result));
             $status_code = curl_getinfo($this->ch,CURLINFO_HTTP_CODE);
             if($status_code != 201){
                 throw new Exception(
@@ -206,8 +226,10 @@ class Project {
             $passes = 0;
             foreach($datas as $issue){
                 try{
-                    $status_code = $this->create_issue($issue);
+                    $result = $this->create_issue($issue);
+                    array_push($result_inf,json_decode($result));
                     $passes++;
+
                 } catch(Exception $ex){
                     $errors++;
                 }
@@ -216,7 +238,7 @@ class Project {
                 return $errors;
             }
         }
-        return true;
+        return $result_inf;
     }
     
     public function issue_count(){
@@ -255,6 +277,8 @@ class Project {
         );
         if($result_limit < 0){
             $data["maxResults"] = $this->issue_count();
+        } else {
+            $data["maxResults"] = $result_limit;
         }
         if(count($fields) > 0){
             $data["fields"] = array();
@@ -290,6 +314,17 @@ class Project {
         curl_close($this->ch);
         $result = json_decode($result,true);
         $result_issues_data = $result["issues"];
+        if($this->cfm_on){
+            try {
+                foreach($result_issues_data as $i=>$issue_data){
+                    $mapped_issue_data =
+                        $this->map_custom_fields($issue_data["fields"]);
+                    $result_issues_data[$i]["fields"] = $mapped_issue_data;
+                }
+            } catch(Exception $ex){
+                throw $ex;
+            }
+        }
         $n_issue_arra = array();
         foreach($result_issues_data as $issue_data){
             $n_issue = new Issue($issue_data);

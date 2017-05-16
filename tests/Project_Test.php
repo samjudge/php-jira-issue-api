@@ -11,10 +11,10 @@ class Project_Test extends TestCase{
     public $project;
     
     public function setUp(){
-        $host = "https://dasdas.atlassian.net";
-        $username = "admin";
+        $host = "http://10.10.0.46:8080";
+        $username = "sam.judge";
         $password = "14mth3l4w";
-        $project_key = "SOM";
+        $project_key = "TPI";
         $this->project = new Project($host, $project_key ,$username, $password);
     }
     
@@ -37,7 +37,7 @@ class Project_Test extends TestCase{
         $issue_data = array(
             "summary" => "test_create_issue"
         );
-        //auto-set :
+        //stuff that gets auto-set :-
         //type (task)
         //project key
         //author
@@ -81,6 +81,7 @@ class Project_Test extends TestCase{
         try{
             $this->project->create_multiple_issues($issue_data); //deafult isAtomic = true
         } catch(Exception $ex){
+            echo $ex;
             $good_insert = false;
         }
         $this->assertTrue($good_insert);
@@ -114,7 +115,7 @@ class Project_Test extends TestCase{
         //using custom field map
         $is_good = true;
         try {
-            $issues = $this->project->query("project = SOM");
+            $issues = $this->project->query("project = TPI");
         } catch (Exception $ex){
             var_dump($ex);
             $is_good = false;
