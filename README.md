@@ -34,4 +34,6 @@ Using the `query` method will return an Issue_Collection. An Issue_Collection re
 
 You pass an array as the same form used by `create_issue` to `set_fields` in order to set the values of these issues. The issues are updated both locally and remotely on JIRA.
 
+You can now retrive the download urls of attachments of jira issues.
+
 :)
