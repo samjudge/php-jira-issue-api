@@ -12,8 +12,8 @@ class Issue_Collection_Test extends TestCase{
     
     public function setUp(){
         $host = "http://10.10.0.46:8080";
-        $username = "sam.judge";
-        $password = "14mth3l4w";
+        $username = "usr";
+        $password = "pwd";
         $project_key = "TPI";
         $this->project = new Project($host, $project_key ,$username, $password);
     }
