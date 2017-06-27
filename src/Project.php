@@ -343,6 +343,4 @@ class Project {
         return $issue_collection;
     }
 }
-
-
  ?>
