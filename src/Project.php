@@ -29,6 +29,8 @@ class Project {
             CURLOPT_URL => $this->host."/rest/api/2/issue/createmeta?expand=projects.issuetypes.fields&projectKeys=".$key,
             CURLOPT_CUSTOMREQUEST => "GET",
             CURLOPT_USERPWD => $this->bauth,
+            CURLOPT_SSL_VERIFYPEER=>false,
+            CURLOPT_SSL_VERIFYHOST=>false,
             CURLOPT_RETURNTRANSFER => true
         ));
         $result = curl_exec($this->ch);
@@ -69,6 +71,8 @@ class Project {
             CURLOPT_URL => $this->host."/rest/api/2/mypermissions",
             CURLOPT_USERPWD => $this->bauth,
             CURLOPT_HEADER => false,
+            CURLOPT_SSL_VERIFYPEER=>false,
+            CURLOPT_SSL_VERIFYHOST=>false,
             CURLOPT_RETURNTRANSFER => true
         ));
         $result = curl_exec($this->ch);
@@ -167,8 +171,11 @@ class Project {
             )
         );
         $result = curl_exec($this->ch);
+        $err = curl_error($this->ch);
         $status_code = curl_getinfo($this->ch,CURLINFO_HTTP_CODE);
         if($status_code != 201){
+            var_dump($data);
+            echo $result;
             throw new Exception(
                 "Error : CreateIssue : Returned Status Code ".$status_code
             );
@@ -250,6 +257,8 @@ class Project {
                 CURLOPT_CUSTOMREQUEST => "GET",
                 CURLOPT_USERPWD => $this->bauth,
                 CURLOPT_HEADER => false,
+                CURLOPT_SSL_VERIFYPEER=>false,
+                CURLOPT_SSL_VERIFYHOST=>false,
                 CURLOPT_RETURNTRANSFER => true
             )
         );
@@ -334,6 +343,4 @@ class Project {
         return $issue_collection;
     }
 }
-
-
  ?>

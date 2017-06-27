@@ -13,10 +13,9 @@ class Issue {
             $this->id = $issue_map["id"];
         }
     }
-    
+
     public $id;
     public $key;
     public $fields = array();
 }
-
 ?>

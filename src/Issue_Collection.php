@@ -12,7 +12,77 @@ class Issue_Collection {
         $this->issues = $data;
         $this->project = $project;
     }
-    
+
+    public function get_comments(){
+        $target = $this->project->get_host()."/rest/api/2/issue/";
+        $keys = array();
+        foreach($this->issues as $issue){
+            if(!in_array($issue->key, $keys)){
+                $keys[] = $issue->key;
+            }
+        }
+        $agg_result = [];
+        foreach($keys as $key){
+            $subtarget = $target . $key;
+            $ch = curl_init();
+            curl_setopt_array($ch,
+                array(
+                    CURLOPT_URL => $subtarget,
+                    CURLOPT_CUSTOMREQUEST => "GET",
+                    CURLOPT_USERPWD => $this->project->get_bauth(),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_SSL_VERIFYPEER=> false,
+                    CURLOPT_SSL_VERIFYHOST=> false
+                )
+            );
+            $result = curl_exec($ch);
+            $status_code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
+            if($status_code != 200){
+                throw new Exception(
+                    "Error : Query : Returned Status Code ".$status_code
+                );
+            }
+            curl_close($ch);
+            $result = json_decode($result,true);
+            $compact = [];
+            $compact = array_merge($compact,$result["fields"]["comment"]);
+            $compact = array_merge(array("key"=>$key),$compact);
+            array_push($agg_result,$compact);
+        }
+        return $agg_result;
+    }
+
+    public function set_priority($prio_name){
+        foreach($this->issues as $issue){
+            $ch = curl_init();
+            $payload = "{\"update\":{\"priority\":[{\"set\":{\"name\":\"".$prio_name."\"}}]}}";
+            curl_setopt_array($ch,
+                array(
+                    CURLOPT_URL => $this->project->get_host()."/rest/api/2/issue/".$issue->key,
+                    CURLOPT_CUSTOMREQUEST => "PUT",
+                    CURLOPT_USERPWD => $this->project->get_bauth(),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => false,
+                    CURLOPT_POSTFIELDS => $payload,
+                    CURLOPT_HTTPHEADER => array(
+                        'Content-Type: application/json',
+                        'Content-Length: '.strlen(json_encode($payload))
+                    )
+                )
+            );
+            $result = curl_exec($ch);
+            $status_code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
+            if($status_code != 204){
+                var_dump($result);
+                throw new Exception(
+                    "Error : Query : Returned Status Code ".$status_code
+                );
+            }
+            curl_close($ch);
+        }
+    }
+
     public function get_fields($fields){
         $issue_list = array();
         foreach($this->issues as $issue){
@@ -20,8 +90,38 @@ class Issue_Collection {
             foreach($fields as $field_name){
                 if(array_key_exists($field_name,$issue->fields)){
                     $got_fields[$field_name] = $issue->fields[$field_name];
+                    if($field_name == "assignee") {
+
+                        //add additional "avatar" prop, a base64 encoded image string
+                        $avatar_url = $got_fields[$field_name]["avatarUrls"]["32x32"];
+                        if($avatar_url != NULL) {
+                            $ch = curl_init();
+                            curl_setopt_array($ch,
+                                array(
+                                    CURLOPT_URL => $avatar_url,
+                                    CURLOPT_CUSTOMREQUEST => "GET",
+                                    CURLOPT_USERPWD => $this->project->get_bauth(),
+                                    CURLOPT_RETURNTRANSFER => true,
+                                    CURLOPT_SSL_VERIFYPEER => false,
+                                    CURLOPT_SSL_VERIFYHOST => false
+                                )
+                            );
+                            $result = curl_exec($ch);
+                            $avatar_image_base64 = base64_encode($result);
+                            $got_fields[$field_name]["avatarBase64"] = $avatar_image_base64;
+                        }
+                    }
                 } else {
-                    throw new Exception("Error : No such field ". $field_name);
+                    //special values
+                    if($field_name == "key"){
+                        $got_fields[$field_name] = $issue->key;
+                    } else if($field_name == "id"){
+                        $got_fields[$field_name] = $issue->id;
+                    } else if($field_name == "comments" || $field_name == "comment"){
+                        $got_fields[$field_name] = $this->get_comments();
+                    } else {
+                        throw new Exception("Error : No such field " . $field_name);
+                    }
                 }
             }
             array_push($issue_list,$got_fields);
@@ -204,6 +304,3 @@ class Issue_Collection {
     }
     
 }
-
-
- ?>
