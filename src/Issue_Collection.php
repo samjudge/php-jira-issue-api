@@ -74,13 +74,16 @@ class Issue_Collection {
             $result = curl_exec($ch);
             $status_code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
             if($status_code != 204){
-                var_dump($result);
                 throw new Exception(
                     "Error : Query : Returned Status Code ".$status_code
                 );
             }
             curl_close($ch);
         }
+    }
+
+    public function get_attachment_bits($attachment_uri){
+
     }
 
     public function get_fields($fields){
@@ -91,7 +94,6 @@ class Issue_Collection {
                 if(array_key_exists($field_name,$issue->fields)){
                     $got_fields[$field_name] = $issue->fields[$field_name];
                     if($field_name == "assignee") {
-
                         //add additional "avatar" prop, a base64 encoded image string
                         $avatar_url = $got_fields[$field_name]["avatarUrls"]["32x32"];
                         if($avatar_url != NULL) {
@@ -128,7 +130,90 @@ class Issue_Collection {
         }
         return $issue_list;
     }
-    
+    /*
+     * Perform a transition if it is possible
+     */
+    public function make_transition_to($to_transition_id){
+        $chs = array();
+        $payload = array(
+            "transition" => array(
+                "id" => $to_transition_id
+            )
+        );
+        foreach($this->issues as $issue){
+            $ch = curl_init();
+            $target = $this->project->get_host()."/rest/api/2/issue/".$issue->key."/transitions";
+            $payload = json_encode($payload);
+            curl_setopt_array($ch,
+                array(
+                    CURLOPT_URL => $target,
+                    CURLOPT_CUSTOMREQUEST => "POST",
+                    CURLOPT_USERPWD => $this->project->get_bauth(),
+                    CURLOPT_POSTFIELDS => $payload,
+                    CURLOPT_SSL_VERIFYPEER=>false,
+                    CURLOPT_SSL_VERIFYHOST=>false,
+                    CURLOPT_HTTPHEADER => array(
+                        'Content-Type: application/json; charset=UTF-8',
+                        'Content-Length: '.strlen($payload)
+                    ),
+                )
+            );
+            curl_exec($ch);
+            $err = curl_error($ch);
+            $status_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if($status_code != 204){
+                throw new Exception(
+                    "a request responded with status code : ".$status_code
+                );
+            }
+        }
+    }
+
+    public function get_transitions(){
+        $mh = curl_multi_init();
+        $chs = array();
+        foreach($this->issues as $issue){
+            $ch = curl_init();
+            $target = $this->project->get_host()."/rest/api/2/issue/".$issue->key."/transitions";
+            curl_setopt_array($ch,
+                array(
+                    CURLOPT_URL => $target,
+                    CURLOPT_CUSTOMREQUEST => "GET",
+                    CURLOPT_USERPWD => $this->project->get_bauth(),
+                    CURLOPT_RETURNTRANSFER => 1,
+                    CURLOPT_SSL_VERIFYPEER=>false,
+                    CURLOPT_SSL_VERIFYHOST=>false,
+                )
+            );
+            curl_multi_add_handle($mh,$ch);
+            array_push($chs,$ch);
+        }
+        $active = NULL;
+        $multi_result = NULL;
+        do {
+            $multi_result = curl_multi_exec($mh, $active);
+        } while ($multi_result == CURLM_CALL_MULTI_PERFORM);
+        while ($active && $multi_result == CURLM_OK) {
+            if (curl_multi_select($mh) != -1) {
+                do {
+                    $multi_result = curl_multi_exec($mh, $active);
+                } while ($multi_result == CURLM_CALL_MULTI_PERFORM);
+            }
+        }
+        $transitions = [];
+        foreach($chs as $ch){
+            $status_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $content = json_decode(curl_multi_getcontent($ch));
+            array_push($transitions, $content);
+            if($status_code != 200){
+                throw new Exception(
+                    "a request responded with status code : ".$status_code
+                );
+            }
+        }
+        return $transitions;
+    }
+
     public function set_fields($fields){
         $updates = array();
         foreach($this->issues as $stored_issue){
@@ -248,10 +333,85 @@ class Issue_Collection {
     * @args $filename get all the attachments that are associated with the issues, [] for none [attachment1,attachment2]
     */
     public function get_attachments(){
-        //get attachment
-        //download attachment to local memory
-        //TODO
-        return [];
+        $ch = curl_init();
+        $results = array();
+        foreach($this->issues as $issue){
+            $target = $this->project->get_host() . "/rest/api/2/issue/" . $issue->key;
+            curl_setopt_array($ch,
+                array(
+                    CURLOPT_URL => $target,
+                    CURLOPT_CUSTOMREQUEST => "GET",
+                    CURLOPT_USERPWD => $this->project->get_bauth(),
+                    CURLOPT_RETURNTRANSFER => 1,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => false,
+                )
+            );
+            $data = curl_exec($ch);
+            $error = curl_error($ch);
+            if ($error) {
+                echo "ERROR : UNABLE TO GET ATTACHED FILE : $error";
+                return false;
+            }
+
+            $data = json_decode($data, true);
+
+            $mh = curl_multi_init();
+            $ch_refs = array();
+            for ($x = 0; $x < count($data["fields"]["attachment"]); $x++) {
+                $attachment = $data["fields"]["attachment"][$x];
+                $ch = curl_init();
+                curl_setopt_array($ch,
+                    array(
+                        CURLOPT_URL => $attachment["content"],
+                        CURLOPT_CUSTOMREQUEST => "GET",
+                        CURLOPT_USERPWD => "service.desk" . ":" . "14mth3l4w",
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_SSL_VERIFYPEER => false,
+                        CURLOPT_SSL_VERIFYHOST => false
+                    )
+                );
+                curl_multi_add_handle($mh, $ch);
+                $ch_wrapper = array(
+                    "token" => $x,
+                    "ch" => $ch
+                );
+                $ch_refs[] = $ch_wrapper;
+            }
+
+            //execute
+            $active = null;
+            do {
+                $mrc = curl_multi_exec($mh, $active);
+            } while ($mrc == CURLM_CALL_MULTI_PERFORM);
+            if(count($data["fields"]["attachment"]) >= 1){
+                //wait
+                while ($active && $mrc == CURLM_OK) {
+                    $curlm_status = curl_multi_select($mh);
+                    if ($curlm_status != -1) {
+                        do {
+                            $mrc = curl_multi_exec($mh, $active);
+                        } while ($mrc == CURLM_CALL_MULTI_PERFORM);
+                    } else {
+                        throw new Exception("ERROR : Was unable to obtain attachemnt data (" . $curlm_status . ")");
+                    }
+                }
+            }
+
+            //get data from each handle
+            foreach($ch_refs as $ch_wrapper){
+                $attachment_data = curl_multi_getcontent($ch_wrapper["ch"]);
+                $token = $ch_wrapper["token"];
+                $result = array(
+                    "base64" => base64_encode($attachment_data),
+                    "uri" => $data["fields"]["attachment"][$token]["content"],
+                    "filename" => $data["fields"]["attachment"][$token]["filename"],
+                    "id" => $data["id"]
+                );
+                $results[] = $result;
+            }
+        }
+        return $results;
     }
 
     /**
@@ -265,11 +425,11 @@ class Issue_Collection {
     /**
     * add_attachment
     * @args $path_to_file Add a new attachment to the non-simple "attachments" issue field. The path to the location of the file (without filename or final '/') from the webroot.
-    * @args $filename The file's name+extension
+    * @args $filename The file's name
     */
     public function add_attachment($path_to_file, $filename){
         $curl = curl_init();
-        $headers = array( //TODO: #thinking
+        $headers = array(
             'X-Atlassian-Token:nocheck',
             'Content-Type: multipart/form-data'
         );
@@ -301,6 +461,7 @@ class Issue_Collection {
         }
         curl_close($curl);
         return true;
-    }
-    
+    }    
 }
+
+ ?>

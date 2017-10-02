@@ -3,7 +3,7 @@
 class Issue {
     
     /**
-    * @args $issue_map  issuemap is the result from a request to JIRA at `/rest/2/api/search`
+    * @args $issue_map  issuemap is the result from a request to JIRA at `/rest/2/jira_api/search`
     *                   containing at least 
     */
     public function __construct($issue_map = false){
@@ -18,4 +18,5 @@ class Issue {
     public $key;
     public $fields = array();
 }
+
 ?>

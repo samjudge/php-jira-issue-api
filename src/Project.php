@@ -29,8 +29,8 @@ class Project {
             CURLOPT_URL => $this->host."/rest/api/2/issue/createmeta?expand=projects.issuetypes.fields&projectKeys=".$key,
             CURLOPT_CUSTOMREQUEST => "GET",
             CURLOPT_USERPWD => $this->bauth,
-            CURLOPT_SSL_VERIFYPEER=>false,
-            CURLOPT_SSL_VERIFYHOST=>false,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_RETURNTRANSFER => true
         ));
         $result = curl_exec($this->ch);
@@ -144,6 +144,7 @@ class Project {
                 throw $ex;
             }
         }
+        array_encode($data);
         $data = array(
             "fields"=>$data
         );
@@ -165,7 +166,7 @@ class Project {
                 CURLOPT_SSL_VERIFYPEER=>false,
                 CURLOPT_SSL_VERIFYHOST=>false,
                 CURLOPT_HTTPHEADER => array(
-                    'Content-Type: application/json',
+                    'Content-Type: application/json; charset=UTF-8',
                     'Content-Length: '.strlen($data)
                 )
             )
@@ -174,7 +175,6 @@ class Project {
         $err = curl_error($this->ch);
         $status_code = curl_getinfo($this->ch,CURLINFO_HTTP_CODE);
         if($status_code != 201){
-            var_dump($data);
             echo $result;
             throw new Exception(
                 "Error : CreateIssue : Returned Status Code ".$status_code
@@ -214,7 +214,7 @@ class Project {
                     CURLOPT_SSL_VERIFYPEER=>false,
                     CURLOPT_SSL_VERIFYHOST=>false,
                     CURLOPT_HTTPHEADER => array(
-                        'Content-Type: application/json',
+                        'Content-Type: application/json; charset=UTF-8',
                         'Content-Length: '.strlen($bulk_data)
                     )
                 )
@@ -247,7 +247,7 @@ class Project {
         }
         return $result_inf;
     }
-    
+
     public function issue_count(){
         $target = $this->host."/rest/api/2/search?fields=*none&maxResults=100000000";
         $this->ch = curl_init();
@@ -282,7 +282,10 @@ class Project {
     public function query($jql = false, $result_limit = -1, $fields = array()){
         $target = $this->host."/rest/api/2/search";
         $data = array(
-                "jql"=>$jql
+                "jql"=>$jql,
+                "expand"=>array(
+                    "attachment"
+                ),
         );
         if($result_limit < 0){
             $data["maxResults"] = $this->issue_count();
@@ -293,6 +296,9 @@ class Project {
             $data["fields"] = array();
             foreach($fields as $field){
                 array_push($data["fields"],$field);
+            }
+            if(!in_array("issuetype",$data["fields"])){
+                array_push($data["fields"],"issuetype");
             }
         }
         $data = json_encode($data);
@@ -308,7 +314,7 @@ class Project {
                 CURLOPT_SSL_VERIFYPEER=>false,
                 CURLOPT_SSL_VERIFYHOST=>false,
                 CURLOPT_HTTPHEADER => array(
-                    'Content-Type: application/json',
+                    'Content-Type: application/json; charset=UTF-8',
                     'Content-Length: '.strlen($data)
                 )
             )
@@ -343,4 +349,13 @@ class Project {
         return $issue_collection;
     }
 }
+
+
+function array_encode(&$arr){
+    array_walk_recursive($arr, function(&$val, $key){
+        $val = utf8_encode($val);
+    });
+    return $arr;
+}
+
  ?>
