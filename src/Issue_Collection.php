@@ -365,7 +365,7 @@ class Issue_Collection {
                     array(
                         CURLOPT_URL => $attachment["content"],
                         CURLOPT_CUSTOMREQUEST => "GET",
-                        CURLOPT_USERPWD => "service.desk" . ":" . "14mth3l4w",
+                        CURLOPT_USERPWD => $this->project->get_bauth(),
                         CURLOPT_RETURNTRANSFER => true,
                         CURLOPT_SSL_VERIFYPEER => false,
                         CURLOPT_SSL_VERIFYHOST => false
